@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "982217144605",
+    "project_id": "nefron-74aea",
+    "storage_bucket": "nefron-74aea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:982217144605:android:24df6127bbbebcd6d349f4",
+        "android_client_info": {
+          "package_name": "com.nefron.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4quCA1DQsPelJ2MNM9dfeeEK6uVDRt-M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
