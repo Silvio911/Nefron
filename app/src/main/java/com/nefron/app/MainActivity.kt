@@ -1,4 +1,4 @@
-package com.example.nefron
+package com.nefron.app
 
 import android.Manifest
 import android.os.Bundle
@@ -9,8 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.example.nefron.ui.ScheduleScreen
-import com.example.nefron.ui.theme.NefronTheme
+import com.nefron.app.ui.ScheduleScreen
+import com.nefron.app.ui.theme.NefronTheme
 
 class MainActivity : ComponentActivity() {
 

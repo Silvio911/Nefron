@@ -1,4 +1,4 @@
-package com.example.nefron.ui.theme
+package com.nefron.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

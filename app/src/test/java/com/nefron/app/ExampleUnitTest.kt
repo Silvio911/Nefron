@@ -1,4 +1,4 @@
-package com.example.nefron
+package com.nefron.app
 
 import org.junit.Test
 

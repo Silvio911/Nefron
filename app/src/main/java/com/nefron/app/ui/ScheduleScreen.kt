@@ -1,4 +1,4 @@
-package com.example.nefron.ui
+package com.nefron.app.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -44,9 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.appwidget.updateAll
 import java.util.Calendar
-import com.example.nefron.data.CallLogHelper
-import com.example.nefron.data.SlotStorage
-import com.example.nefron.widget.ClinicWidget
+import com.nefron.app.data.CallLogHelper
+import com.nefron.app.data.SlotStorage
+import com.nefron.app.widget.ClinicWidget
 import kotlinx.coroutines.launch
 
 @Composable

@@ -1,4 +1,4 @@
-package com.example.nefron.widget
+package com.nefron.app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
@@ -30,8 +30,8 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import com.example.nefron.data.CallLogHelper
-import com.example.nefron.data.SlotStorage
+import com.nefron.app.data.CallLogHelper
+import com.nefron.app.data.SlotStorage
 import java.util.Calendar
 
 private val keyDay  = ActionParameters.Key<String>("day")

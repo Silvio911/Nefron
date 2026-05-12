@@ -1,4 +1,4 @@
-package com.example.nefron.data
+package com.nefron.app.data
 
 import android.content.Context
 import android.provider.CallLog
