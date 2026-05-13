@@ -1,12 +1,10 @@
 package com.nefron.app.data
 
 import android.content.Context
-import java.util.Calendar
 
 object SlotStorage {
 
     private const val PREFS = "clinic_slots"
-    private const val KEY_WEEK = "week_of_year"
 
     val DAYS = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT")
     val SLOTS = listOf(
@@ -14,13 +12,8 @@ object SlotStorage {
         "18:30", "19:00", "19:30", "20:00", "20:30"
     )
 
-    fun checkWeekReset(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val currentWeek = Calendar.getInstance().get(Calendar.WEEK_OF_YEAR)
-        if (prefs.getInt(KEY_WEEK, -1) != currentWeek) {
-            prefs.edit().clear().putInt(KEY_WEEK, currentWeek).apply()
-        }
-    }
+    fun resetAll(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
 
     fun getPhone(context: Context, day: String, time: String): String? =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
