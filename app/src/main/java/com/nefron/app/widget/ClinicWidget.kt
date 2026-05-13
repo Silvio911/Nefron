@@ -31,11 +31,12 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.nefron.app.data.CallLogHelper
+import com.nefron.app.data.Slot
 import com.nefron.app.data.SlotStorage
 import java.util.Calendar
 
-private val keyDay  = ActionParameters.Key<String>("day")
-private val keyTime = ActionParameters.Key<String>("time")
+private val keyDay   = ActionParameters.Key<String>("day")
+private val keyIndex = ActionParameters.Key<Int>("index")
 
 class ClinicWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -47,7 +48,7 @@ class ClinicWidget : GlanceAppWidget() {
 private fun WidgetContent() {
     val context = LocalContext.current
     val today   = todayLabel()
-    val slots   = SlotStorage.getAllForDay(context, today)
+    val slots   = SlotStorage.getSlotsForDay(context, today)
 
     Column(
         modifier = GlanceModifier
@@ -60,34 +61,34 @@ private fun WidgetContent() {
             style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)
         )
         Spacer(GlanceModifier.height(4.dp))
-        SlotStorage.SLOTS.forEach { time ->
-            WidgetSlotRow(time = time, phone = slots[time], today = today)
+        slots.forEach { slot ->
+            WidgetSlotRow(slot = slot, today = today)
         }
     }
 }
 
 @Composable
-private fun WidgetSlotRow(time: String, phone: String?, today: String) {
+private fun WidgetSlotRow(slot: Slot, today: String) {
     val baseModifier = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)
-    val rowModifier  = if (phone == null) {
+    val rowModifier  = if (slot.phone == null) {
         baseModifier.clickable(
             actionRunCallback<AssignSlotAction>(
-                actionParametersOf(keyDay to today, keyTime to time)
+                actionParametersOf(keyDay to today, keyIndex to slot.index)
             )
         )
     } else baseModifier
 
     Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text     = time,
+            text     = slot.startTime,
             style    = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold),
             modifier = GlanceModifier.width(54.dp)
         )
         Text(
-            text  = phone ?: "—",
+            text  = slot.phone?.ifBlank { "Booked" } ?: "—",
             style = TextStyle(
                 fontSize = 13.sp,
-                color    = ColorProvider(if (phone != null) Color(0xFF1B5E20) else Color.Gray)
+                color    = ColorProvider(if (slot.phone != null) Color(0xFF1B5E20) else Color.Gray)
             )
         )
     }
@@ -99,10 +100,10 @@ class AssignSlotAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        val day   = parameters[keyDay]  ?: return
-        val time  = parameters[keyTime] ?: return
+        val day   = parameters[keyDay]   ?: return
+        val index = parameters[keyIndex] ?: return
         val phone = CallLogHelper.getLastIncomingCall(context) ?: return
-        SlotStorage.setPhone(context, day, time, phone)
+        SlotStorage.setPhone(context, day, index, phone)
         ClinicWidget().update(context, glanceId)
     }
 }
