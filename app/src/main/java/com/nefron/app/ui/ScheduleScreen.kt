@@ -49,21 +49,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.glance.appwidget.updateAll
 import com.nefron.app.data.CallLogHelper
 import com.nefron.app.data.Slot
 import com.nefron.app.data.SlotStorage
-import com.nefron.app.widget.ClinicWidget
 import java.util.Calendar
 import kotlinx.coroutines.launch
 
-private val DURATION_OPTIONS = listOf(15, 30, 45)
+private val DURATION_OPTIONS = listOf(15, 30)
 
-private fun slotHeight(durationMinutes: Int) = when {
-    durationMinutes <= 15 -> 52.dp
-    durationMinutes <= 30 -> 72.dp
-    else                  -> 96.dp
-}
+private fun slotHeight(durationMinutes: Int) =
+    if (durationMinutes <= 15) 52.dp else 72.dp
 
 @Composable
 fun ScheduleScreen() {
@@ -73,16 +68,15 @@ fun ScheduleScreen() {
         return
     }
 
-    val context         = LocalContext.current
-    val scope           = rememberCoroutineScope()
-    val snackbar        = remember { SnackbarHostState() }
+    val context  = LocalContext.current
+    val scope    = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
     var selectedDay     by remember { mutableStateOf(todayLabel()) }
     var slots           by remember { mutableStateOf(SlotStorage.getSlotsForDay(context, selectedDay)) }
     var showResetDialog by remember { mutableStateOf(false) }
 
     fun refresh() {
         slots = SlotStorage.getSlotsForDay(context, selectedDay)
-        scope.launch { ClinicWidget().updateAll(context) }
     }
 
     Scaffold(
@@ -115,8 +109,10 @@ fun ScheduleScreen() {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(slots, key = { it.index }) { slot ->
+                    val nextSlot = slots.getOrNull(slot.index + 1)
                     SlotRow(
-                        slot        = slot,
+                        slot     = slot,
+                        nextSlot = nextSlot,
                         onTap       = {
                             if (slot.phone == null) {
                                 SlotStorage.setPhone(context, selectedDay, slot.index, "")
@@ -170,6 +166,7 @@ fun ScheduleScreen() {
 @Composable
 private fun SlotRow(
     slot: Slot,
+    nextSlot: Slot?,
     onTap: () -> Unit,
     onPasteCall: () -> Unit,
     onUnbook: () -> Unit,
@@ -245,6 +242,12 @@ private fun SlotRow(
             onDismissRequest = { showMenu = false }
         ) {
             DURATION_OPTIONS.forEach { minutes ->
+                val enabled = if (minutes <= slot.durationMinutes) {
+                    true // shrink always allowed
+                } else {
+                    val delta = minutes - slot.durationMinutes
+                    nextSlot != null && nextSlot.phone == null && delta <= nextSlot.durationMinutes
+                }
                 DropdownMenuItem(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -261,7 +264,8 @@ private fun SlotRow(
                     onClick = {
                         showMenu = false
                         onSetDuration(minutes)
-                    }
+                    },
+                    enabled = enabled
                 )
             }
         }

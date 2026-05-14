@@ -29,26 +29,63 @@ object SlotStorage {
     fun setDuration(context: Context, day: String, index: Int, minutes: Int) {
         val durations = getDurations(context, day).toMutableList()
         if (index >= durations.size) return
-        durations[index] = minutes
+        val oldDuration = durations[index]
+        if (minutes == oldDuration) return
 
         val totalMinutes = END_HOUR * 60 - (START_HOUR * 60 + START_MINUTE)
-        var used = 0
-        val newDurations = mutableListOf<Int>()
-        for (d in durations) {
-            if (used + d > totalMinutes) break
-            newDurations.add(d)
-            used += d
+        val prefs = context.getSharedPreferences(PREFS_PHONES, Context.MODE_PRIVATE)
+
+        if (minutes < oldDuration) {
+            // Shrink: insert leftover as a new free slot right after,
+            // shifting phone bookings up by 1 so their start times don't move.
+            val leftover = oldDuration - minutes
+            durations[index] = minutes
+            durations.add(index + 1, leftover)
+
+            val editor = prefs.edit()
+            for (i in 25 downTo (index + 1)) {
+                val phone = prefs.getString("$day.$i", null)
+                if (phone != null) editor.putString("$day.${i + 1}", phone)
+                else editor.remove("$day.${i + 1}")
+            }
+            editor.remove("$day.${index + 1}") // inserted slot is free
+            editor.apply()
+
+            var used = 0
+            val newDurations = mutableListOf<Int>()
+            for (d in durations) {
+                if (used + d > totalMinutes) break
+                newDurations.add(d)
+                used += d
+            }
+            saveDurations(context, day, newDurations)
+        } else {
+            // Expand: absorb time from the immediately following free slot only.
+            val delta = minutes - oldDuration
+            val nextIndex = index + 1
+            if (nextIndex >= durations.size) return
+            val nextDuration = durations[nextIndex]
+            if (nextDuration < delta) return // next slot too small
+
+            durations[index] = minutes
+
+            if (nextDuration == delta) {
+                // Fully absorb next slot: remove it and shift phone indices down by 1
+                durations.removeAt(nextIndex)
+                val editor = prefs.edit()
+                for (i in nextIndex until 25) {
+                    val phone = prefs.getString("$day.${i + 1}", null)
+                    if (phone != null) editor.putString("$day.$i", phone)
+                    else editor.remove("$day.$i")
+                }
+                editor.apply()
+            } else {
+                // Partial absorption: shrink next slot by delta, indices unchanged
+                durations[nextIndex] = nextDuration - delta
+            }
+
+            saveDurations(context, day, durations)
         }
-        // remove phones for slots that were trimmed
-        val editor = context.getSharedPreferences(PREFS_PHONES, Context.MODE_PRIVATE).edit()
-        for (i in newDurations.size until durations.size + 5) editor.remove("$day.$i")
-        // fill remaining room with default slots
-        while (used + DEFAULT_DURATION <= totalMinutes) {
-            newDurations.add(DEFAULT_DURATION)
-            used += DEFAULT_DURATION
-        }
-        editor.apply()
-        saveDurations(context, day, newDurations)
     }
 
     fun getPhone(context: Context, day: String, index: Int): String? =
