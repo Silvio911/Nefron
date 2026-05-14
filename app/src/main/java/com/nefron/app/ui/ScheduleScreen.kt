@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PhoneCallback
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -28,6 +28,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
@@ -36,11 +37,14 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -74,6 +78,8 @@ fun ScheduleScreen() {
     var selectedDay     by remember { mutableStateOf(todayLabel()) }
     var slots           by remember { mutableStateOf(SlotStorage.getSlotsForDay(context, selectedDay)) }
     var showResetDialog by remember { mutableStateOf(false) }
+    // slotIndex → pre-filled text from last caller
+    var pasteDialog by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
     fun refresh() {
         slots = SlotStorage.getSlotsForDay(context, selectedDay)
@@ -120,13 +126,11 @@ fun ScheduleScreen() {
                             }
                         },
                         onPasteCall = {
-                            val number = CallLogHelper.getLastIncomingCall(context) ?: return@SlotRow
-                            val bookedNumbers = slots.mapNotNull { it.phone }.filter { it.isNotBlank() }
-                            if (bookedNumbers.contains(number)) {
-                                scope.launch { snackbar.showSnackbar("$number is already booked") }
+                            val display = CallLogHelper.getLastIncomingCallDisplay(context)
+                            if (display != null) {
+                                pasteDialog = Pair(slot.index, display)
                             } else {
-                                SlotStorage.setPhone(context, selectedDay, slot.index, number)
-                                refresh()
+                                scope.launch { snackbar.showSnackbar("No recent call found") }
                             }
                         },
                         onUnbook    = {
@@ -141,6 +145,35 @@ fun ScheduleScreen() {
                 }
             }
         }
+    }
+
+    pasteDialog?.let { (slotIndex, initialText) ->
+        var text by remember(slotIndex) { mutableStateOf(initialText) }
+        val focusRequester = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        AlertDialog(
+            onDismissRequest = { pasteDialog = null },
+            title = { Text(slots.find { it.index == slotIndex }?.startTime ?: "") },
+            text  = {
+                OutlinedTextField(
+                    value         = text,
+                    onValueChange = { text = it },
+                    label         = { Text("Name or note") },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth().focusRequester(focusRequester)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    SlotStorage.setPhone(context, selectedDay, slotIndex, text)
+                    pasteDialog = null
+                    refresh()
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pasteDialog = null }) { Text("Cancel") }
+            }
+        )
     }
 
     if (showResetDialog) {
@@ -221,7 +254,7 @@ private fun SlotRow(
                 if (assigned) {
                     IconButton(onClick = onPasteCall) {
                         Icon(
-                            imageVector        = Icons.Default.PhoneCallback,
+                            imageVector        = Icons.Default.PersonAdd,
                             contentDescription = "Paste last call",
                             tint               = MaterialTheme.colorScheme.onPrimaryContainer
                         )
