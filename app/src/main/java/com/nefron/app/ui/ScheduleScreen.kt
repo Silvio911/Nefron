@@ -1,11 +1,14 @@
 package com.nefron.app.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,40 +27,49 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import com.nefron.app.data.CallEntry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nefron.app.data.CallLogHelper
 import com.nefron.app.data.Slot
 import com.nefron.app.data.SlotStorage
 import java.util.Calendar
-import kotlinx.coroutines.launch
 
 private val DURATION_OPTIONS = listOf(15, 30)
 
@@ -66,28 +78,35 @@ private fun slotHeight(durationMinutes: Int) =
 
 @Composable
 fun ScheduleScreen() {
-    val isSunday = Calendar.getInstance().get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY
-    if (isSunday) {
-        ClosedScreen()
-        return
-    }
-
-    val context  = LocalContext.current
-    val scope    = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
     var selectedDay     by remember { mutableStateOf(todayLabel()) }
     var slots           by remember { mutableStateOf(SlotStorage.getSlotsForDay(context, selectedDay)) }
     var showResetDialog by remember { mutableStateOf(false) }
-    // slotIndex → pre-filled text from last caller
-    var pasteDialog by remember { mutableStateOf<Pair<Int, String>?>(null) }
+    var callPickerSlot  by remember { mutableStateOf<Slot?>(null) }
+    var pasteDialog     by remember { mutableStateOf<Pair<Int, String>?>(null) }
+    var pendingPickerSlot by remember { mutableStateOf<Slot?>(null) }
+    var recentCalls       by remember { mutableStateOf<List<CallEntry>>(emptyList()) }
+
+    LaunchedEffect(callPickerSlot) {
+        recentCalls = if (callPickerSlot != null) {
+            withContext(Dispatchers.IO) { CallLogHelper.getRecentIncomingCalls(context) }
+        } else emptyList()
+    }
+
+    val requestContacts = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        // open the sheet regardless — names show if granted, numbers if not
+        callPickerSlot = pendingPickerSlot
+        pendingPickerSlot = null
+    }
 
     fun refresh() {
         slots = SlotStorage.getSlotsForDay(context, selectedDay)
     }
 
     Scaffold(
-        modifier      = Modifier.statusBarsPadding(),
-        snackbarHost  = { SnackbarHost(snackbar) },
+        modifier             = Modifier.statusBarsPadding(),
         floatingActionButton = {
             FloatingActionButton(
                 onClick        = { showResetDialog = true },
@@ -98,7 +117,7 @@ fun ScheduleScreen() {
         }
     ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
-            ScrollableTabRow(selectedTabIndex = SlotStorage.DAYS.indexOf(selectedDay)) {
+            PrimaryScrollableTabRow(selectedTabIndex = SlotStorage.DAYS.indexOf(selectedDay)) {
                 SlotStorage.DAYS.forEach { day ->
                     Tab(
                         selected = day == selectedDay,
@@ -111,7 +130,8 @@ fun ScheduleScreen() {
                 }
             }
             LazyColumn(
-                modifier            = Modifier.fillMaxSize().padding(16.dp),
+                modifier        = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                contentPadding  = PaddingValues(top = 16.dp, bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(slots, key = { it.index }) { slot ->
@@ -120,17 +140,16 @@ fun ScheduleScreen() {
                         slot     = slot,
                         nextSlot = nextSlot,
                         onTap       = {
-                            if (slot.phone == null) {
-                                SlotStorage.setPhone(context, selectedDay, slot.index, "")
-                                refresh()
-                            }
+                            SlotStorage.setPhone(context, selectedDay, slot.index, "")
+                            refresh()
                         },
                         onPasteCall = {
-                            val display = CallLogHelper.getLastIncomingCallDisplay(context)
-                            if (display != null) {
-                                pasteDialog = Pair(slot.index, display)
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
+                                == PackageManager.PERMISSION_GRANTED) {
+                                callPickerSlot = slot
                             } else {
-                                scope.launch { snackbar.showSnackbar("No recent call found") }
+                                pendingPickerSlot = slot
+                                requestContacts.launch(Manifest.permission.READ_CONTACTS)
                             }
                         },
                         onUnbook    = {
@@ -144,6 +163,66 @@ fun ScheduleScreen() {
                     )
                 }
             }
+        }
+    }
+
+    callPickerSlot?.let { slot ->
+        @OptIn(ExperimentalMaterial3Api::class)
+        ModalBottomSheet(
+            onDismissRequest = { callPickerSlot = null },
+            sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Text(
+                text     = "Recent calls",
+                style    = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+            HorizontalDivider()
+            if (recentCalls.isEmpty()) {
+                Text(
+                    text     = "No recent incoming calls found.",
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(20.dp)
+                )
+            } else {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    recentCalls.forEach { entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    callPickerSlot = null
+                                    pasteDialog = Pair(slot.index, entry.display)
+                                }
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text     = entry.time,
+                                style    = MaterialTheme.typography.labelSmall,
+                                color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(60.dp)
+                            )
+                            Column {
+                                Text(
+                                    text       = entry.display,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize   = 16.sp
+                                )
+                                if (entry.name != null) {
+                                    Text(
+                                        text  = entry.number,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.height(32.dp))
         }
     }
 
@@ -305,26 +384,6 @@ private fun SlotRow(
     }
 }
 
-@Composable
-private fun ClosedScreen() {
-    Box(
-        modifier         = Modifier.fillMaxSize().statusBarsPadding(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text("Closed", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B9DC2))
-            Text(
-                text      = "The clinic is closed on Sundays.\nSee you tomorrow.",
-                fontSize  = 16.sp,
-                color     = Color(0xFF8AA0B0),
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
 
 private fun todayLabel() = when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) {
     Calendar.MONDAY    -> "MON"
@@ -332,5 +391,6 @@ private fun todayLabel() = when (Calendar.getInstance().get(Calendar.DAY_OF_WEEK
     Calendar.WEDNESDAY -> "WED"
     Calendar.THURSDAY  -> "THU"
     Calendar.FRIDAY    -> "FRI"
-    else               -> "SAT"
+    Calendar.SATURDAY  -> "SAT"
+    else               -> "MON" // Sunday — show next week's Monday
 }
