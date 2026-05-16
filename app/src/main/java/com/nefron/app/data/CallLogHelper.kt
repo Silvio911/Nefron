@@ -22,18 +22,23 @@ object CallLogHelper {
     fun getRecentIncomingCalls(context: Context): List<CallEntry> {
         val entries = mutableListOf<CallEntry>()
         val seen = mutableSetOf<String>()
+        val todayStart = LocalDate.now(ZoneId.systemDefault())
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
         try {
             val cursor = context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
                 arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.DATE),
-                "${CallLog.Calls.TYPE} IN (${CallLog.Calls.INCOMING_TYPE}, ${CallLog.Calls.MISSED_TYPE})",
+                "${CallLog.Calls.TYPE} != ${CallLog.Calls.OUTGOING_TYPE}",
                 null,
                 "${CallLog.Calls.DATE} DESC"
             ) ?: return emptyList()
             cursor.use {
-                while (it.moveToNext() && entries.size < 20) {
+                while (it.moveToNext()) {
                     val number = it.getString(0)?.takeIf { n -> n.isNotBlank() } ?: continue
                     val date   = it.getLong(1)
+                    if (date < todayStart && entries.size >= 30) break
                     if (seen.add(number)) {
                         entries.add(
                             CallEntry(
